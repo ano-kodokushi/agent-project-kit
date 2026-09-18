@@ -1,0 +1,10 @@
+{
+  "name": "todo-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "零依赖待办清单 CLI —— agent-project-kit 的可跑示例",
+  "scripts": {
+    "test": "node test/run.js"
+  }
+}

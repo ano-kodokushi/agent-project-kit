@@ -16,6 +16,7 @@ import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveGit, GIT_NOT_FOUND } from './lib/resolve-git.mjs';
 
 const USAGE = [
   '用法: node bootstrap.mjs <项目绝对路径> [--name 项目名] [--remote <url>] [--no-git] [--dry-run]',
@@ -27,30 +28,7 @@ const USAGE = [
 // 按脚本自身位置推算，不写死盘符，也不假设调用时的工作目录。
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TEMPLATE = HERE;
-
-/**
- * 找 git 可执行文件。
- * 为什么不直接写 'git'：某些托管环境（含本项目最初开发用的沙箱）**PATH 是空字符串**，
- * 裸调 git 会直接失败——这是个真实环境，不是臆想。所以先试常见绝对路径，再回退到 PATH 扫描。
- * 需要覆盖时设环境变量 DSH_GIT。
- * @returns 绝对路径；找不到返回 null
- */
-function resolveGit() {
-  if (process.env.DSH_GIT !== undefined) return process.env.DSH_GIT;
-  const names = ['git.exe', 'git'];
-  const roots = [process.env.ProgramFiles, process.env['ProgramFiles(x86)'], process.env.LOCALAPPDATA]
-    .filter(Boolean)
-    .map((d) => join(d, 'Git', 'cmd'));
-  for (const dir of roots) {
-    for (const n of names) if (existsSync(join(dir, n))) return join(dir, n);
-  }
-  for (const dir of (process.env.PATH ?? '').split(';')) {
-    if (dir === '') continue;
-    for (const n of names) if (existsSync(join(dir, n))) return join(dir, n);
-  }
-  return null;
-}
-
+// git 解析抽到 lib/ 共享，避免每个脚本各写一遍（示例驱动器就因各写一遍而踩过坑）
 const GIT = resolveGit();
 
 // [模板里的相对路径, 项目里的相对路径]
@@ -81,9 +59,7 @@ function parseCli(argv) {
 
 /** 运行 git 并回传结果；不抛异常，由调用方决定怎么处理。 */
 function git(args, cwd) {
-  if (GIT === null) {
-    return { code: 127, out: '找不到 git。请把 git 加入 PATH，或设环境变量 DSH_GIT 指向 git 可执行文件' };
-  }
+  if (GIT === null) return { code: 127, out: GIT_NOT_FOUND };
   const r = spawnSync(GIT, args, { cwd, encoding: 'utf8' });
   return { code: r.status, out: `${r.stdout ?? ''}${r.stderr ?? ''}`.trim() };
 }
